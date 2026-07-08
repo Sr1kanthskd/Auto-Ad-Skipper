@@ -57,6 +57,10 @@ jobs:
         RES_DIR="app/src/main/res"
         if [ ! -z "$ICON_SRC" ] && [ -d "$RES_DIR" ]; then
           mkdir -p "$RES_DIR/mipmap-mdpi" "$RES_DIR/mipmap-hdpi" "$RES_DIR/mipmap-xhdpi" "$RES_DIR/mipmap-xxhdpi" "$RES_DIR/mipmap-xxxhdpi"
+          
+          # CRITICAL FIX: Purge existing .webp and legacy launcher assets before copying fresh ones
+          find "$RES_DIR" -name "ic_launcher*" -delete
+          
           cp "$ICON_SRC" "$RES_DIR/mipmap-mdpi/ic_launcher.png" || true
           cp "$ICON_SRC" "$RES_DIR/mipmap-hdpi/ic_launcher.png" || true
           cp "$ICON_SRC" "$RES_DIR/mipmap-xhdpi/ic_launcher.png" || true
