@@ -1,0 +1,102 @@
+name: Build Production APK & AAB From Fresh ZIP
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+
+    - name: Unzip Fresh Project Files
+      run: |
+        unzip auto-ad-skipper.zip
+        rm auto-ad-skipper.zip
+
+    - name: Auto-Fix Directory Structure
+      run: |
+        TARGET_DIR=$(find . -maxdepth 3 -name "build.gradle" -o -name "build.gradle.kts" | head -n 1 | xargs dirname)
+        if [ "$TARGET_DIR" != "." ] && [ ! -z "$TARGET_DIR" ]; then
+          echo "Moving files out of subfolder: $TARGET_DIR"
+          mv "$TARGET_DIR"/* . 2>/dev/null || true
+          mv "$TARGET_DIR"/.* . 2>/dev/null || true
+          rm -rf "$TARGET_DIR"
+        fi
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+        cache: 'gradle'
+
+    - name: Ensure Gradle Wrapper Exists
+      run: |
+        if [ ! -f "gradlew" ]; then
+          echo "Generating Gradle wrapper version 9.3.1..."
+          gradle wrapper --gradle-version 9.3.1
+        fi
+        chmod +x gradlew
+
+    - name: Fix Android Manifest Permissions & Themes
+      run: |
+        MANIFEST_FILE=$(find . -name "AndroidManifest.xml" | head -n 1)
+        if [ ! -z "$MANIFEST_FILE" ]; then
+          echo "Fixing manifest properties in: $MANIFEST_FILE"
+          sed -i 's|<manifest[^>]*>|&\n    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />|' "$MANIFEST_FILE"
+          sed -i 's|android:theme="@style/Theme.MyApplication"|android:theme="@android:style/Theme.DeviceDefault.NoActionBar"|g' "$MANIFEST_FILE"
+        fi
+
+    - name: Configure App Icon Assets
+      run: |
+        ICON_SRC=$(find . -name "icon.png" | head -n 1)
+        RES_DIR="app/src/main/res"
+        if [ ! -z "$ICON_SRC" ] && [ -d "$RES_DIR" ]; then
+          mkdir -p "$RES_DIR/mipmap-mdpi" "$RES_DIR/mipmap-hdpi" "$RES_DIR/mipmap-xhdpi" "$RES_DIR/mipmap-xxhdpi" "$RES_DIR/mipmap-xxxhdpi"
+          cp "$ICON_SRC" "$RES_DIR/mipmap-mdpi/ic_launcher.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-hdpi/ic_launcher.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-xhdpi/ic_launcher.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-xxhdpi/ic_launcher.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-xxxhdpi/ic_launcher.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-mdpi/ic_launcher_round.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-hdpi/ic_launcher_round.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-xhdpi/ic_launcher_round.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-xxhdpi/ic_launcher_round.png" || true
+          cp "$ICON_SRC" "$RES_DIR/mipmap-xxxhdpi/ic_launcher_round.png" || true
+        fi
+
+    - name: Create Expected Production Keystore
+      run: |
+        keytool -genkey -v -keystore my-upload-key.jks -storepass android -alias upload -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Release,O=Android,C=US"
+        cp my-upload-key.jks app/ 2>/dev/null || true
+
+    - name: Build Production Release APK
+      env:
+        STORE_PASSWORD: android
+        KEY_PASSWORD: android
+        KEY_ALIAS: upload
+      run: ./gradlew assembleRelease
+
+    - name: Build Production Release Bundle (AAB)
+      env:
+        STORE_PASSWORD: android
+        KEY_PASSWORD: android
+        KEY_ALIAS: upload
+      run: ./gradlew bundleRelease
+
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: auto-ad-skipper-RELEASE-APK
+        path: app/build/outputs/apk/release/
+
+    - name: Upload Release AAB
+      uses: actions/upload-artifact@v4
+      with:
+        name: auto-ad-skipper-RELEASE-AAB
+        path: app/build/outputs/bundle/release/
+        
