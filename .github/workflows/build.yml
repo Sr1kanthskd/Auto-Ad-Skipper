@@ -42,12 +42,12 @@ jobs:
         fi
         chmod +x gradlew
 
-    - name: Fix Android Manifest Permissions & Themes
+    - name: Fix Android Manifest Themes
       run: |
         MANIFEST_FILE=$(find . -name "AndroidManifest.xml" | head -n 1)
         if [ ! -z "$MANIFEST_FILE" ]; then
           echo "Fixing manifest properties in: $MANIFEST_FILE"
-          sed -i 's|<manifest[^>]*>|&\n    <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />|' "$MANIFEST_FILE"
+          # Removed the broken BIND_ACCESSIBILITY_SERVICE injection line that caused the crash
           sed -i 's|android:theme="@style/Theme.MyApplication"|android:theme="@android:style/Theme.DeviceDefault.NoActionBar"|g' "$MANIFEST_FILE"
         fi
 
@@ -58,7 +58,7 @@ jobs:
         if [ ! -z "$ICON_SRC" ] && [ -d "$RES_DIR" ]; then
           mkdir -p "$RES_DIR/mipmap-mdpi" "$RES_DIR/mipmap-hdpi" "$RES_DIR/mipmap-xhdpi" "$RES_DIR/mipmap-xxhdpi" "$RES_DIR/mipmap-xxxhdpi"
           
-          # CRITICAL FIX: Purge existing .webp and legacy launcher assets before copying fresh ones
+          # Clean out old assets to prevent duplicate resource errors
           find "$RES_DIR" -name "ic_launcher*" -delete
           
           cp "$ICON_SRC" "$RES_DIR/mipmap-mdpi/ic_launcher.png" || true
